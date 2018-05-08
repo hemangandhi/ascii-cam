@@ -1,0 +1,8 @@
+[package]
+name = "ascii-cam"
+version = "0.1.0"
+authors = ["heman <hemangandhi@gmail.com>"]
+
+[dependencies]
+rscam = "*"
+image = "0.19.0"
