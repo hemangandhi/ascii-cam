@@ -1,20 +1,17 @@
 extern crate image;
+
+#[cfg(feature="webcam")]
 extern crate rscam;
+
 use std::env;
 use std::fs;
 use std::io::Write;
 
-type ImageFilter<P: image::Pixel> = fn(u32, u32, image::ImageBuffer<P, Vec<P::Subpixel>>, P) -> P;
+mod filters;
 
-fn color_dist(this: image::Rgb<u8>, other: image::Rgb<u8>) -> u32{
-    let d_x = (this.data[0] - other.data[0]) as f64;
-    let d_y = (this.data[1] - other.data[1]) as f64;
-    let d_z = (this.data[2] - other.data[2]) as f64;
-    return (d_x * d_x + d_y * d_y + d_z * d_z).sqrt() as u32;
-}
-
-fn convert_frame(frame: rscam::Frame, filters: &[ImageFilter<image::Rgb<u8>>]) -> Option<Vec<u8>>{
-    let mut buf: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> = match image::ImageBuffer::from_vec(frame.resolution.0, frame.resolution.1, Vec::from(&frame[..])) {
+#[cfg(feature="webcam")]
+fn convert_frame(frame: rscam::Frame, filters: &[filters::ImageFilter<image::Rgb<u8>>]) -> Option<Vec<u8>>{
+    let buf: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> = match image::ImageBuffer::from_vec(frame.resolution.0, frame.resolution.1, Vec::from(&frame[..])) {
         Some(ib) => ib,
         None => {
             println!("Wrong dimensions!");
@@ -22,12 +19,11 @@ fn convert_frame(frame: rscam::Frame, filters: &[ImageFilter<image::Rgb<u8>>]) -
         }
     };
 
-    let inner_fn = |x, y| filters.iter().fold(*buf.get_pixel(x, y), |p, f| f(x, y, buf, p));
-    let new_buf = image::ImageBuffer::from_fn(frame.resolution.0, frame.resolution.1, inner_fn);
-
-    return Some(new_buf.into_vec());
+    let fin_buf = filters.iter().fold(buf, |b, f| f(&b));
+    return Some(fin_buf.into_vec());
 }
 
+#[cfg(feature="webcam")]
 fn run_on_cam(cam: &str){
     let mut camera = match rscam::Camera::new(cam) {
         Ok(c) => c,
@@ -63,13 +59,54 @@ fn run_on_cam(cam: &str){
     }
 }
 
+fn run_from_file_to_file(in_path: &str, filts: &[& filters::ImageFilter<image::Rgb<u8>>], out_path: &str) {
+    let in_buf = match image::open(in_path) {
+        Ok(ib) => ib.to_rgb(),
+        Err(e) => {
+            println!("Couldn't read from {}: {}", in_path, e);
+            return;
+        }
+    };
+
+    match filts.iter().fold(in_buf, |b, f| f(b)).save(out_path) {
+        Err(e) => {
+            println!("Couldn't read to {}: {}", out_path, e);
+        },
+        Ok(()) => ()
+    };
+}
+
+#[cfg(feature="webcam")]
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        println!("USAGE: {} <file name for the webcam device>", args[0]);
+
+    match args.len() {
+        2 => {
+            let file_name = &args[1];
+            run_on_cam(file_name);
+        },
+        3 => {
+            //just testing... run only the filters
+            println!("TESTING FILTERS!!");
+        },
+        _ => {
+            println!("USAGE: {} <file name for the webcam device>", args[0]);
+            println!("FOR TESTS: {} <something> <something else>", args[0]);
+        }
+    }
+}
+
+#[cfg(not(feature="webcam"))]
+fn main() {
+    println!("Testing only! Build with --features \"webcam\" to run the other configuration.");
+
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 3 {
+        println!("USAGE: {} <input file> <output file>", &args[0]);
         return;
     }
 
-    let file_name = &args[1];
-    run_on_cam(file_name);
+    let carl = & *(filters::gaussian_blur(5.0));
+    let filts: [& filters::ImageFilter<image::Rgb<u8>>; 1] = [carl];
+    run_from_file_to_file(&args[1], &filts, &args[2]);
 }
