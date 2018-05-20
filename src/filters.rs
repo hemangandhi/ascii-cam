@@ -1,11 +1,20 @@
 extern crate image;
 
 use std::f64::consts::PI;
+use std::ops::Sub;
 
-fn color_dist(this: image::Rgb<u8>, other: image::Rgb<u8>) -> u32{
-    let d_x = (this.data[0] - other.data[0]) as f64;
-    let d_y = (this.data[1] - other.data[1]) as f64;
-    let d_z = (this.data[2] - other.data[2]) as f64;
+fn super_safe_sub<T: Sub<Output=T> + Ord>(x: T, y: T) -> T {
+    if x > y {
+        return x - y;
+    } else {
+        return y - x;
+    }
+}
+
+fn color_dist(this: &image::Rgb<u8>, other: &image::Rgb<u8>) -> u32{
+    let d_x = super_safe_sub(this.data[0], other.data[0]) as f64;
+    let d_y = super_safe_sub(this.data[1], other.data[1]) as f64;
+    let d_z = super_safe_sub(this.data[2], other.data[2]) as f64;
     return (d_x * d_x + d_y * d_y + d_z * d_z).sqrt() as u32;
 }
 
@@ -41,4 +50,28 @@ pub fn gaussian_blur(sigma: f64) -> Box<ImageFilter<image::Rgb<u8>>> {
         return image::ImageBuffer::from_fn(ib.width(), ib.height(), inner);
     };
     return Box::new(rv);
+}
+
+pub fn color_dist_lines(dist: u32 ) -> Box<ImageFilter<image::Rgb<u8>>> {
+    return Box::new(move |ib| {
+        return image::ImageBuffer::from_fn(ib.width(), ib.height(), |x, y| {
+            for i in (x as i32) - 1 .. (x as i32) + 1 {
+                for j in (y as i32) - 1 .. (y as i32) + 1 {
+                    if i < 0 || i >= (ib.width() as i32) || j < 0 || j >= (ib.height() as i32) {
+                        continue;
+                    }
+
+                    if color_dist(ib.get_pixel(x, y), ib.get_pixel(i as u32, j as u32)) > dist {
+                        return image::Rgb{
+                            data: [0, 0, 0]
+                        };
+                    }
+                }
+            }
+
+            return image::Rgb{
+                data: [255, 255, 255]
+            };
+        });
+    });
 }
