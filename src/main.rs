@@ -106,8 +106,10 @@ fn main() {
         return;
     }
 
-    let carl = & *(filters::gaussian_blur(5.0));
-    let marx = &*(filters::color_dist_lines(5));
-    let filts: [& filters::ImageFilter<image::Rgb<u8>>; 2] = [carl, marx];
+    let carl = & *(filters::gaussian_blur(2.0));
+    let carl2 = & *(filters::gaussian_blur(7.0));
+    let marx = &*(filters::color_dist_lines(15));
+    let downer = &*(filters::down_sample(5, 5));
+    let filts: [& filters::ImageFilter<image::Rgb<u8>>; 3] = [carl, marx, downer];
     run_from_file_to_file(&args[1], &filts, &args[2]);
 }

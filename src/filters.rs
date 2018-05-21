@@ -75,3 +75,29 @@ pub fn color_dist_lines(dist: u32 ) -> Box<ImageFilter<image::Rgb<u8>>> {
         });
     });
 }
+
+pub fn down_sample(hscale: u32, wscale: u32) -> Box<ImageFilter<image::Rgb<u8>>> {
+    return Box::new(move |ib| {
+        return image::ImageBuffer::from_fn(ib.width() / wscale, ib.height() / hscale, |x, y| {
+            let top_left_x = wscale * x;
+            let top_left_y = hscale * y;
+            let bottom_right_x = wscale * (x + 1) - 1;
+            let bottom_right_y = hscale * (y + 1) - 1;
+            let area = ((bottom_right_x - top_left_x) * (bottom_right_y - top_left_y)) as f64;
+
+            let mut pix: [f64; 3] = [0.0, 0.0, 0.0];
+            for i in top_left_x .. bottom_right_x {
+                for j in top_left_y .. bottom_right_y {
+                    let p = ib.get_pixel(i, j);
+                    pix[0] += (p[0] as f64)/area;
+                    pix[1] += (p[1] as f64)/area;
+                    pix[2] += (p[2] as f64)/area;
+                }
+            }
+
+            return image::Rgb{
+                data: [pix[0] as u8, pix[1] as u8, pix[2] as u8]
+            };
+        });
+    });
+}
